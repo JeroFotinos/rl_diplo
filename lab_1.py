@@ -1,4 +1,4 @@
-'''Reinformcent Learning - Lab 1
+"""Reinformcent Learning - Lab 1
 
 For being able to watch the videos, I've installed the ffmpeg library via `sudo apt install ffmpeg`.
 
@@ -12,7 +12,7 @@ We will work with “The Cliff”. Some definitions (see [Cliff Walking - Gymnas
 - q: `dict` with `(state, a)` keys and `float` values (that stand for the value of taking that action in that state).
 - hyperparameters: `dict` defined below, with the necessary values for SARSA and Q-learning.
 
-'''
+"""
 
 
 import itertools
@@ -29,12 +29,12 @@ import imageio
 
 # -------------------- Some plotting functions -------------------------------
 
+
 def plot_reward_per_episode(reward_ep) -> None:
     episode_rewards = np.array(reward_ep)
 
     # se suaviza la curva de convergencia
-    episode_number = np.linspace(
-        1, len(episode_rewards) + 1, len(episode_rewards) + 1)
+    episode_number = np.linspace(1, len(episode_rewards) + 1, len(episode_rewards) + 1)
     acumulated_rewards = np.cumsum(episode_rewards)
 
     reward_per_episode = [
@@ -46,7 +46,7 @@ def plot_reward_per_episode(reward_ep) -> None:
     plt.title("Recompensa acumulada por episodio")
     # plt.show()
     # we save the plot
-    plt.savefig('reward_per_episode.png', dpi=1000)
+    plt.savefig("reward_per_episode.png", dpi=1000)
 
 
 def plot_steps_per_episode(timesteps_ep) -> None:
@@ -56,27 +56,25 @@ def plot_steps_per_episode(timesteps_ep) -> None:
     plt.title("Pasos (timesteps) por episodio")
     # plt.show()
     # we save the plot
-    plt.savefig('steps_per_episode.png', dpi=1000)
+    plt.savefig("steps_per_episode.png", dpi=1000)
 
 
 def plot_steps_per_episode_smooth(timesteps_ep) -> None:
     episode_steps = np.array(timesteps_ep)
 
     # se suaviza la curva de aprendizaje
-    episode_number = np.linspace(
-        1, len(episode_steps) + 1, len(episode_steps) + 1)
+    episode_number = np.linspace(1, len(episode_steps) + 1, len(episode_steps) + 1)
     acumulated_steps = np.cumsum(episode_steps)
 
     steps_per_episode = [
-        acumulated_steps[i] / episode_number[i] for i in range(
-            len(acumulated_steps))
+        acumulated_steps[i] / episode_number[i] for i in range(len(acumulated_steps))
     ]
 
     plt.plot(steps_per_episode)
     plt.title("Pasos (timesteps) acumulados por episodio")
     # plt.show()
     # we save the plot
-    plt.savefig('steps_per_episode_smooth.png', dpi=1000)
+    plt.savefig("steps_per_episode_smooth.png", dpi=1000)
 
 
 def draw_value_matrix(q) -> None:
@@ -91,8 +89,7 @@ def draw_value_matrix(q) -> None:
             state_values = []
 
             for action in range(n_actions):
-                state_values.append(
-                    q.get((row * n_columns + column, action), -100))
+                state_values.append(q.get((row * n_columns + column, action), -100))
 
             maximum_value = max(
                 state_values
@@ -140,19 +137,20 @@ def draw_value_matrix(q) -> None:
     plt.yticks([])
     # plt.show()
     # we save the plot
-    plt.savefig('value_matrix.png')
+    plt.savefig("value_matrix.png")
 
     print("\n Matriz de mejor acción-valor (en números): \n\n", q_value_matrix)
 
 
 # ------------------------ Policies ------------------------------------------
 
+
 def choose_action_e_greedy(
-        state: int,
-        actions: range,
-        q: dict,
-        hyperparameters: dict,
-        random_state: np.random.RandomState,
+    state: int,
+    actions: range,
+    q: dict,
+    hyperparameters: dict,
+    random_state: np.random.RandomState,
 ) -> int:
     """
     Elije una acción de acuerdo al aprendizaje realizado previamente
@@ -162,7 +160,7 @@ def choose_action_e_greedy(
     q_values = [q.get((state, a), 0.0) for a in actions]
     max_q = max(q_values)
     # sorteamos un número: es menor a épsilon?
-    if random_state.uniform() < hyperparameters['epsilon']:
+    if random_state.uniform() < hyperparameters["epsilon"]:
         # sí: se selecciona una acción aleatoria
         return random_state.choice(actions)
 
@@ -181,11 +179,11 @@ def choose_action_e_greedy(
 
 
 def choose_action_softmax(
-        state: int,
-        actions: range,
-        q: dict,
-        hyperparameters: dict,
-        random_state: np.random.RandomState,
+    state: int,
+    actions: range,
+    q: dict,
+    hyperparameters: dict,
+    random_state: np.random.RandomState,
 ) -> int:
     """
     Choose an action according to the learning done previously
@@ -193,14 +191,14 @@ def choose_action_softmax(
     """
     # we get the value of each action in this state
     q_values = [q.get((state, a), 0.0) for a in actions]
-    
+
     # we get the temperature to be used
-    tau = hyperparameters['tau']
-    
+    tau = hyperparameters["tau"]
+
     # we calculate the probabilities of the policy
-    policy = [np.exp(q_values[a]/tau) for a in actions]
+    policy = [np.exp(q_values[a] / tau) for a in actions]
     norm = sum(policy)
-    policy = [p/norm for p in policy]
+    policy = [p / norm for p in policy]
 
     # now, we select action i with probability policy[i]
     # (we get a random number and then compare it with
@@ -212,19 +210,20 @@ def choose_action_softmax(
         i += 1
     # note that i is incremented one more time than needed
 
-    return actions[i-1]
+    return actions[i - 1]
 
 
 # ------------------ Action-value Learning algorithms ------------------------
 
+
 def learn_SARSA(
-        state: int,
-        action: int,
-        reward: int,
-        next_state: int,
-        next_action: int,
-        q: dict,
-        hyperparameters: dict,
+    state: int,
+    action: int,
+    reward: int,
+    next_state: int,
+    next_action: int,
+    q: dict,
+    hyperparameters: dict,
 ) -> None:
     """Update the Q-value for the given state and action pair
     using SARSA learning (on-policy TD control).
@@ -242,21 +241,23 @@ def learn_SARSA(
         q[(state, action)] = 0.0  # or another initial value
     if (next_state, next_action) not in q:
         q[(next_state, next_action)] = 0.0  # or another initial value
-    
+
     # Q(s,a) <- Q(s,a) + alpha * (reward + gamma * Q(s',a') - Q(s,a))
-    q[(state, action)] += hyperparameters['alpha'] * (
-        reward + hyperparameters['gamma'] * q[(next_state, next_action)] -
-        q[(state, action)])
+    q[(state, action)] += hyperparameters["alpha"] * (
+        reward
+        + hyperparameters["gamma"] * q[(next_state, next_action)]
+        - q[(state, action)]
+    )
 
 
 def learn_Q_learning(
-        state: int,
-        action: int,
-        reward: int,
-        next_state: int,
-        next_action: int,
-        q: dict,
-        hyperparameters: dict,
+    state: int,
+    action: int,
+    reward: int,
+    next_state: int,
+    next_action: int,
+    q: dict,
+    hyperparameters: dict,
 ) -> None:
     """Update the Q-value for the given state and action pair
     using Q-learning algorithm (off-policy TD control).
@@ -279,15 +280,16 @@ def learn_Q_learning(
         q[(state, action)] = 0.0  # or another initial value
     if (next_state, next_action) not in q:
         q[(next_state, next_action)] = 0.0  # or another initial value
-    
+
     # Q(s,a) <- Q(s,a) + alpha * (reward + gamma * max_a' Q(s',a') - Q(s,a))
     q_max = max([q.get((next_state, a), 0.0) for a in range(4)])
-    q[(state, action)] += hyperparameters['alpha'] * (
-        reward + hyperparameters['gamma'] * q_max -
-        q[(state, action)])
+    q[(state, action)] += hyperparameters["alpha"] * (
+        reward + hyperparameters["gamma"] * q_max - q[(state, action)]
+    )
 
 
 # ------------------ Training Loop ------------------------
+
 
 def run(
     learning_function: Callable,
@@ -333,7 +335,8 @@ def run(
         # elige una acción basado en el estado actual.
         # Filtra el primer elemento de state, que es el estado en sí mismo
         action = choose_action_with_policy(
-            state, actions, q, hyperparameters, random_state)
+            state, actions, q, hyperparameters, random_state
+        )
 
         while not done:
             # el agente ejecuta la acción elegida y obtiene los resultados
@@ -346,10 +349,13 @@ def run(
                     frames.append(frame)
 
             next_action = choose_action_with_policy(
-                next_state, actions, q, hyperparameters, random_state)
+                next_state, actions, q, hyperparameters, random_state
+            )
 
             episode_reward += reward
-            learning_function(state, action, reward, next_state, next_action, q, hyperparameters)
+            learning_function(
+                state, action, reward, next_state, next_action, q, hyperparameters
+            )
 
             done = terminated or truncated
 
@@ -366,16 +372,15 @@ def run(
                 )
 
             t += 1
-        
+
         # Create and save GIF after each 100 episodes
         if render and episode % 100 == 0:
-            imageio.mimsave(f'episode_{episode}.gif', frames, duration=12)
+            imageio.mimsave(f"episode_{episode}.gif", frames, duration=12)
             frames = []
-    
+
     # Create a GIF for all episodes to show the learning process
     if render:
-        imageio.mimsave('all_episodes.gif', all_frames, duration=12)
-
+        imageio.mimsave("all_episodes.gif", all_frames, duration=12)
 
     return reward_of_episode.mean(), timesteps_of_episode, reward_of_episode
 
@@ -407,7 +412,7 @@ learning_function = learn_SARSA
 # cantidad de episodios a ejecutar
 episodes_to_run = 500
 
-env = gym.make("CliffWalking-v0", render_mode='rgb_array')
+env = gym.make("CliffWalking-v0", render_mode="rgb_array")
 actions = range(env.action_space.n)
 
 # se declara una semilla aleatoria
