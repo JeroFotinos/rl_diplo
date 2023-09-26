@@ -24,6 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import gymnasium as gym
+import imageio
 
 
 # -------------------- Some plotting functions -------------------------------
@@ -296,6 +297,7 @@ def run(
     actions: range,
     q: dict,
     random_state: np.random.RandomState,
+    render: bool = False,
 ) -> Tuple[float, np.ndarray, np.ndarray]:
     """
     Corre el algoritmo de RL para el ambiente env.
@@ -314,7 +316,10 @@ def run(
     # cantidad de recompensa que recibió el agente en cada episodio
     reward_of_episode = []
 
-    for _ in range(episodes_to_run):
+    all_frames = []  # For storing frames of all episodes
+    frames = []  # For storing frames of the current episode
+
+    for episode in range(episodes_to_run):
         # se ejecuta una instancia del agente hasta que el mismo
         # llega a la salida o tarda más de 2000 pasos
 
@@ -333,6 +338,12 @@ def run(
         while not done:
             # el agente ejecuta la acción elegida y obtiene los resultados
             next_state, reward, terminated, truncated, _ = env.step(action)
+
+            if render:
+                frame = env.render()
+                all_frames.append(frame)
+                if episode % 100 == 0:
+                    frames.append(frame)
 
             next_action = choose_action_with_policy(
                 next_state, actions, q, hyperparameters, random_state)
@@ -355,6 +366,16 @@ def run(
                 )
 
             t += 1
+        
+        # Create and save GIF after each 100 episodes
+        if render and episode % 100 == 0:
+            imageio.mimsave(f'episode_{episode}.gif', frames, duration=12)
+            frames = []
+    
+    # Create a GIF for all episodes to show the learning process
+    if render:
+        imageio.mimsave('all_episodes.gif', all_frames, duration=12)
+
 
     return reward_of_episode.mean(), timesteps_of_episode, reward_of_episode
 
@@ -364,6 +385,10 @@ def run(
 # se crea el diccionario que contendrá los valores de Q
 # para cada tupla (estado, acción)
 q = {}
+
+# frames for animations
+all_frames = []  # For storing frames of all episodes
+frames = []  # For storing frames of the current episode
 
 # definimos sus híper-parámetros básicos
 hyperparameters = {
@@ -382,7 +407,7 @@ learning_function = learn_SARSA
 # cantidad de episodios a ejecutar
 episodes_to_run = 500
 
-env = gym.make("CliffWalking-v0")
+env = gym.make("CliffWalking-v0", render_mode='rgb_array')
 actions = range(env.action_space.n)
 
 # se declara una semilla aleatoria
@@ -396,11 +421,12 @@ avg_rew_per_episode, timesteps_ep, reward_ep = run(
     env,
     actions,
     q,
-    random_state
+    random_state,
+    render=True,
 )
 
-plot_steps_per_episode(timesteps_ep)
-plot_steps_per_episode_smooth(timesteps_ep)
-draw_value_matrix(q)
+# plot_steps_per_episode(timesteps_ep)
+# plot_steps_per_episode_smooth(timesteps_ep)
+# draw_value_matrix(q)
 
 env.close()
