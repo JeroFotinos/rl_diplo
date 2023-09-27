@@ -16,12 +16,12 @@ We will work with “The Cliff”. Some definitions (see [Cliff Walking - Gymnas
 
 
 import itertools
-from typing import Any, Callable, Tuple
-
+from typing import Any, Callable, Tuple, List
 from IPython.display import clear_output
 
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 import gymnasium as gym
 import imageio
@@ -77,16 +77,83 @@ def plot_steps_per_episode_smooth(timesteps_ep) -> None:
     plt.savefig("steps_per_episode_smooth.png", dpi=1000)
 
 
+# This function combines the three previous ones and has a better output.
+def plot_combined_metrics(
+    reward_ep: list,
+    timesteps_ep: list,
+    hyperparameters: dict = None,
+    include_rewards: bool = True,
+    include_timesteps: bool = True,
+) -> None:
+    """
+    Plot the reward per episode and/or the number of timesteps per episode.
+
+    Parameters
+    ----------
+    reward_ep : list
+        List containing the reward obtained per episode.
+    timesteps_ep : list
+        List containing the number of timesteps taken per episode.
+    hyperparameters : dict, optional
+        Dictionary containing hyperparameters like alpha, gamma, epsilon, and tau.
+    include_rewards : bool, optional
+        Flag to include reward metrics in the plot.
+    include_timesteps : bool, optional
+        Flag to include timestep metrics in the plot.
+
+    Returns
+    -------
+    None
+    """
+
+    episode_number = np.linspace(1, len(timesteps_ep) + 1, len(timesteps_ep) + 1)
+
+    # If include_rewards is True, plot reward per episode
+    if include_rewards:
+        episode_rewards = np.array(reward_ep)
+        cum_rewards = np.cumsum(episode_rewards)
+        reward_per_episode_smooth = [
+            cum_rewards[i] / episode_number[i] for i in range(len(cum_rewards))
+        ]
+        plt.plot(reward_per_episode_smooth, label="Reward Smooth")
+        plt.plot(reward_ep, label="Reward Original", alpha=0.5)
+
+    # If include_timesteps is True, plot timesteps per episode
+    if include_timesteps:
+        episode_steps = np.array(timesteps_ep)
+        cum_steps = np.cumsum(episode_steps)
+        steps_per_episode_smooth = [
+            cum_steps[i] / episode_number[i] for i in range(len(cum_steps))
+        ]
+        plt.plot(steps_per_episode_smooth, label="Timesteps Smooth")
+        plt.plot(timesteps_ep, label="Timesteps Original", alpha=0.5)
+
+    # Labels and titles
+    plt.title("Metrics per Episode")
+    plt.xlabel("Episode")
+    plt.ylabel("Metric Value")
+    plt.legend()
+
+    # File saving
+    filename = "metrics_per_episode"
+    if hyperparameters:
+        filename += f"_alpha_{hyperparameters.get('alpha', 'NA')}_gamma_{hyperparameters.get('gamma', 'NA')}_epsilon_{hyperparameters.get('epsilon', 'NA')}_tau_{hyperparameters.get('tau', 'NA')}"
+    filename += ".png"
+
+    plt.savefig(filename, dpi=1000)
+    plt.close()
+
+
 def draw_value_matrix(q: dict) -> None:
     """Plots the action-value matrix based on a given Q-table.
-    
+
     This function generates a heatmap to represent the value of the best
     action for each state in the gridworld “The Cliff” of OpenAI's `gymnasium`.
     It also annotates the heatmap with letters indicating the direction of the
     best action for each state.
-    
+
     The function saves the generated plot as 'value_matrix.png'.
-    
+
     Parameters
     ----------
     q : dict
@@ -108,7 +175,7 @@ def draw_value_matrix(q: dict) -> None:
     - The terminal state (goal state) is hardcoded as state 47, corresponding
     to the position (3, 11) in the grid.
     """
-    
+
     n_rows, n_columns, n_actions = 4, 12, 4
     q_value_matrix = np.empty((n_rows, n_columns))
 
@@ -130,12 +197,12 @@ def draw_value_matrix(q: dict) -> None:
 
     for row, column in itertools.product(range(n_rows), range(n_columns)):
         state = row * n_columns + column
-        best_action_value = -float('inf')
+        best_action_value = -float("inf")
         best_action = None
         arrow_direction = ""
 
         # we map action indices to arrow directions
-        action_map = {0: 'U', 1: 'R', 2: 'D', 3: 'L'}
+        action_map = {0: "U", 1: "R", 2: "D", 3: "L"}
 
         for action in range(n_actions):
             action_value = q.get((state, action), -1000)
@@ -262,7 +329,9 @@ def learn_SARSA(
 
     Notes
     -----
-    The Q-value for the current state-action pair is updated using the
+    - The function initializes the Q-value to 0.0 for new state-action pairs
+    if they are not already present in `q`.
+    - The Q-value for the current state-action pair is updated using the
     formula:
 
     .. math::
@@ -275,10 +344,8 @@ def learn_SARSA(
     - \( Q(s, a) \) is the current Q-value
     - \( Q(s', a') \) is the Q-value for the next state-action pair
 
-    The function initializes the Q-value to 0.0 for new state-action pairs if they are not already present in `q`.
-
     """
-    
+
     # initialize the Q-value for brand-new state-action pairs
     if (state, action) not in q:
         q[(state, action)] = 0.0  # or another initial value
@@ -302,20 +369,57 @@ def learn_Q_learning(
     q: dict,
     hyperparameters: dict,
 ) -> None:
-    """Update the Q-value for the given state and action pair
-    using Q-learning algorithm (off-policy TD control).
+    """Update the Q-value for a given state-action pair using the Q-Learning
+    algorithm.
 
-    Args:
-        state (int): the current state
-        action (int): the current action
-        reward (int): the reward obtained by taking action `action` in state `state`
-        next_state (int): the next state
-        next_action (int): the next action
+    The function performs an off-policy Temporal Difference (TD) control to
+    update the Q-value for a specific state and action based on the provided
+    reward and the estimated optimal future value.
+
+    Parameters
+    ----------
+    state : int
+        The current state in the environment, represented as an integer.
+    action : int
+        The action taken in the current state, represented as an integer.
+    reward : int
+        The immediate reward received after taking the specified action in the
+        given state.
+    next_state : int
+        The state transitioned to after taking the specified action.
+    next_action : int
+        The action to be taken in the next state.
+    q : dict
+        A dictionary mapping from state-action tuples to Q-values.
+    hyperparameters : dict
+        A dictionary containing the learning rate (alpha) and discount factor
+        (gamma).
+
+    Returns
+    -------
+    None
 
     Notes
     -----
-    I keep the next_action parameter for consistency with the SARSA function.
-    In this way, I can use the both with the same signature.
+    - The `next_action` parameter is included for signature consistency with
+    the SARSA function, although it is not used.
+    - The function expects the action space to be of size 4, which needs to be
+    considered if adapting the code for other problems.
+    - The function initializes the Q-value to 0.0 for new state-action pairs.
+    - The Q-value for the current state-action pair is updated using the
+    formula:
+
+    .. math::
+        Q(s, a) \leftarrow Q(s, a) + \alpha \times (r + \gamma \times \max_{a'} Q(s', a') - Q(s, a))
+
+    Where:
+    - \( \alpha \) is the learning rate
+    - \( \gamma \) is the discount factor
+    - \( r \) is the reward
+    - \( Q(s, a) \) is the current Q-value
+    - \( Q(s', a') \) is the Q-value for the next state and the action that
+    maximizes it
+
     """
 
     # initialize the Q-value for brand-new state-action pairs
@@ -428,6 +532,155 @@ def run(
     return reward_of_episode.mean(), timesteps_of_episode, reward_of_episode
 
 
+# =============== CUSTOM CODE FOR ANALYZING CONVERGENCE ======================
+
+
+def run_multiple_experiments(
+    learning_function,
+    hyperparameters_list: List[dict],
+    episodes_to_run: int,
+    env,
+    actions: List[int],
+    q: dict,
+    random_state: int,
+    # render: bool = False,
+) -> List[Tuple[list, list]]:
+    """Run experiments with different sets of hyperparameters.
+
+    Parameters
+    ----------
+    (All the parameters of the `run` function)
+    hyperparameters_list : List[dict]
+        List of dictionaries, each containing a set of hyperparameters.
+
+    Returns
+    -------
+    List[Tuple[list, list]]
+        A list of tuples, each containing reward_ep and timesteps_ep for each hyperparameter set.
+    """
+
+    render=False
+    # this is hardcoded cause render=True doesn't make sense in this context,
+    # buy I want to reuse the code of the `run` function.
+
+    results = []
+
+    for hyperparameters in hyperparameters_list:
+        avg_rew_per_episode, timesteps_ep, reward_ep = run(
+            learning_function,
+            hyperparameters,
+            episodes_to_run,
+            env,
+            actions,
+            q,
+            random_state,
+            render=render,
+        )
+        results.append((reward_ep, timesteps_ep))
+
+    return results
+
+
+def plot_multiple_metrics(
+    results: List[Tuple[list, list]], 
+    hyperparameters_list: List[dict] = None,
+    include_rewards: bool = True,
+    include_timesteps: bool = True,
+    log_scale: bool = False
+) -> None:
+    """
+    Plot metrics from multiple experiments.
+
+    Parameters
+    ----------
+    results : List[Tuple[list, list]]
+        List of tuples, each containing reward_ep and timesteps_ep.
+    hyperparameters_list : List[dict], optional
+        List of dictionaries, each containing a set of hyperparameters.
+    include_rewards : bool, optional
+        Flag to include reward metrics in the plot.
+    include_timesteps : bool, optional
+        Flag to include timestep metrics in the plot.
+    log_scale : bool, optional
+        Flag to set the y-axis to a logarithmic scale.
+
+    Returns
+    -------
+    None
+    """
+
+    sns.set_theme(style="darkgrid")
+    color_palette = sns.color_palette("husl", len(results))
+
+    # Figure Size
+    plt.figure(figsize=(16, 8))
+
+    
+    for i, (reward_ep, timesteps_ep) in enumerate(results):
+        color = color_palette[i]
+        lighter_color = tuple(list(color[:3]) + [0.5])  # Same RGB but with different Alpha
+
+        hyperparameters = hyperparameters_list[i] if hyperparameters_list else {}
+        episode_number = np.linspace(1, len(timesteps_ep) + 1, len(timesteps_ep) + 1)
+
+        label_suffix = f" (alpha={hyperparameters.get('alpha', 'NA')}, gamma={hyperparameters.get('gamma', 'NA')})"
+        
+        if include_rewards:
+            cum_rewards = np.cumsum(np.array(reward_ep))
+            reward_per_episode_smooth = [cum_rewards[j] / episode_number[j] for j in range(len(cum_rewards))]
+            plt.plot(reward_per_episode_smooth, label='Reward Smooth' + label_suffix, color=color)
+            plt.plot(reward_ep, label='Reward Original' + label_suffix, color=lighter_color)
+
+        if include_timesteps:
+            cum_steps = np.cumsum(np.array(timesteps_ep))
+            steps_per_episode_smooth = [cum_steps[j] / episode_number[j] for j in range(len(cum_steps))]
+            plt.plot(steps_per_episode_smooth, label='Timesteps Smooth' + label_suffix, color=color)
+            plt.plot(timesteps_ep, label='Timesteps Original' + label_suffix, color=lighter_color)
+
+    # Customizing y-ticks for linear or log scale
+    if log_scale:
+        plt.yscale("log")
+        
+        # Adapt ticks for log scale
+        y_min, y_max = plt.ylim()
+        ticks = np.logspace(np.log10(y_min), np.log10(y_max), num=10)
+        plt.yticks(ticks, [f"{tick:.2e}" for tick in ticks])
+
+    else:
+        # Customizing y-ticks for linear scale
+        y_ticks = np.arange(
+            int(plt.ylim()[0]), 
+            int(plt.ylim()[1]) + 1, 
+            step=(plt.ylim()[1] - plt.ylim()[0]) / 20
+        )
+        plt.yticks(y_ticks)
+    
+    # Labels and titles
+    plt.xlabel("Episode")
+    if include_rewards and include_timesteps:
+        plt.ylabel("Metric Value")
+        plt.title("Metrics per Episode")
+    elif include_rewards:
+        plt.ylabel("Reward")
+        plt.title("Reward per Episode")
+    elif include_timesteps:
+        plt.ylabel("Timesteps")
+        plt.title("Timesteps per Episode")
+    
+    plt.legend()
+
+    # saving plot
+    if include_rewards and include_timesteps:
+        plt.savefig("metrics_per_episode.png")
+    elif include_rewards:
+        plt.savefig("reward_per_episode.png")
+    elif include_timesteps:
+        plt.savefig("timesteps_per_episode.png")
+
+    plt.show()
+
+
+
 # ----------------------------------------------------------------------------
 # ----------------------------    Main    ------------------------------------
 # ----------------------------------------------------------------------------
@@ -439,13 +692,13 @@ q = {}
 
 
 # --------------------------   Hyperparameters   -----------------------------
-# Basic starting parameters (given by the teachers)
-hyperparameters = {
-    "alpha": 0.5,
-    "gamma": 1,
-    "epsilon": 0.1,
-    "tau": 25,
-}
+# # Basic starting parameters (given by the professors)
+# hyperparameters = {
+#     "alpha": 0.5,
+#     "gamma": 1,
+#     "epsilon": 0.1,
+#     "tau": 25,
+# }
 
 # # Parameters for favouring exploration (still SARSA)
 # hyperparameters = {
@@ -454,14 +707,15 @@ hyperparameters = {
 #     "epsilon": 0.3,
 #     "tau": 25,
 # }
-# ----------------------------------------------------------------------------
+
+# -----------------------  Other choices  ------------------------------------
 
 
 # Policy options: choose_action_e_greedy, choose_action_softmax
 choose_action_with_policy = choose_action_e_greedy
 
 # Learning algorithm options: learn_Q_learning, learn_SARSA
-learning_function = learn_Q_learning
+learning_function = learn_SARSA
 
 # cantidad de episodios a ejecutar
 episodes_to_run = 500
@@ -472,20 +726,71 @@ actions = range(env.action_space.n)
 # se declara una semilla aleatoria
 random_state = np.random.RandomState(42)
 
-# agent execution
-avg_rew_per_episode, timesteps_ep, reward_ep = run(
-    learning_function,
-    hyperparameters,
-    episodes_to_run,
-    env,
-    actions,
-    q,
-    random_state,
-    render=True,
-)
+
+# ---------------------   Execution Zone   -----------------------------------
+
+# # agent execution
+# avg_rew_per_episode, timesteps_ep, reward_ep = run(
+#     learning_function,
+#     hyperparameters,
+#     episodes_to_run,
+#     env,
+#     actions,
+#     q,
+#     random_state,
+#     render=False,
+# )
 
 # plot_steps_per_episode(timesteps_ep)
 # plot_steps_per_episode_smooth(timesteps_ep)
 # draw_value_matrix(q)
+
+# plot_combined_metrics(reward_ep, timesteps_ep, hyperparameters, include_rewards=True, include_timesteps=False)
+
+
+# ---------- Comparing convergence for different hyperparameters -------------
+# We take the hyperparameters given by the professors as base point from which
+# we will change one parameter at a time. These were:
+# hyperparameters = {"alpha": 0.5, "gamma": 1, "epsilon": 0.1, "tau": 25}
+
+# changing alpha
+hyperparameters_list = [
+    {'alpha': 0.01, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+    {'alpha': 0.1, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+    {'alpha': 0.3, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+    {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+    ]
+
+# changing gamma
+# hyperparameters_list = [
+#     {'alpha': 0.5, 'gamma': 0.5, 'epsilon': 0.1, 'tau': 25},
+#     {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+#     {'alpha': 0.5, 'gamma': 1.5, 'epsilon': 0.1, 'tau': 25},
+#     ]
+
+# changing epsilon
+# hyperparameters_list = [
+#     {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+#     {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.3, 'tau': 25},
+#     {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.5, 'tau': 25},
+#     ]
+
+# ---------------------
+
+
+results = run_multiple_experiments(
+    learning_function, 
+    hyperparameters_list, 
+    episodes_to_run, 
+    env, 
+    actions, 
+    q, 
+    random_state,
+    # render=False
+)
+
+plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, include_timesteps=True, log_scale=False)
+
+
 
 env.close()
