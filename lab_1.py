@@ -428,17 +428,18 @@ def run(
     return reward_of_episode.mean(), timesteps_of_episode, reward_of_episode
 
 
-# ------------------ Main ------------------------
+# ----------------------------------------------------------------------------
+# ----------------------------    Main    ------------------------------------
+# ----------------------------------------------------------------------------
+
 
 # se crea el diccionario que contendrá los valores de Q
 # para cada tupla (estado, acción)
 q = {}
 
-# frames for animations
-all_frames = []  # For storing frames of all episodes
-frames = []  # For storing frames of the current episode
 
-# definimos sus híper-parámetros básicos
+# --------------------------   Hyperparameters   -----------------------------
+# Basic starting parameters (given by the teachers)
 hyperparameters = {
     "alpha": 0.5,
     "gamma": 1,
@@ -446,11 +447,21 @@ hyperparameters = {
     "tau": 25,
 }
 
-# política para elegir acciones
+# # Parameters for favouring exploration (still SARSA)
+# hyperparameters = {
+#     "alpha": 0.1,
+#     "gamma": 1.5,
+#     "epsilon": 0.3,
+#     "tau": 25,
+# }
+# ----------------------------------------------------------------------------
+
+
+# Policy options: choose_action_e_greedy, choose_action_softmax
 choose_action_with_policy = choose_action_e_greedy
 
-# se puede cambiar por learn_Q_learning, una vez que se implemente
-learning_function = learn_SARSA
+# Learning algorithm options: learn_Q_learning, learn_SARSA
+learning_function = learn_Q_learning
 
 # cantidad de episodios a ejecutar
 episodes_to_run = 500
@@ -470,11 +481,11 @@ avg_rew_per_episode, timesteps_ep, reward_ep = run(
     actions,
     q,
     random_state,
-    render=False,
+    render=True,
 )
 
 # plot_steps_per_episode(timesteps_ep)
 # plot_steps_per_episode_smooth(timesteps_ep)
-draw_value_matrix(q)
+# draw_value_matrix(q)
 
 env.close()
