@@ -77,69 +77,82 @@ def plot_steps_per_episode_smooth(timesteps_ep) -> None:
     plt.savefig("steps_per_episode_smooth.png", dpi=1000)
 
 
-def draw_value_matrix(q) -> None:
-    n_rows = 4
-    n_columns = 12
-    n_actions = 4
+def draw_value_matrix(q: dict) -> None:
+    """Plots the action-value matrix based on a given Q-table.
+    
+    This function generates a heatmap to represent the value of the best
+    action for each state in the gridworld “The Cliff” of OpenAI's `gymnasium`.
+    It also annotates the heatmap with letters indicating the direction of the
+    best action for each state.
+    
+    The function saves the generated plot as 'value_matrix.png'.
+    
+    Parameters
+    ----------
+    q : dict
+        A dictionary mapping state-action pairs to Q-values. The state is
+        represented as an integer, while the action is also represented as an
+        integer. For example, `q[(0, 1)]` gives the Q-value for being in state
+        0 and taking action 1.
 
-    # se procede con los cálculos previos a la graficación de la matriz de valor
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    - The function expects a 4x12 gridworld represented in a Q-table,
+    consistent with OpenAI Gymnasium's CliffWalking environment.
+    - The function uses matplotlib to generate the plot and saves it as a PNG
+    file.
+    - The terminal state (goal state) is hardcoded as state 47, corresponding
+    to the position (3, 11) in the grid.
+    """
+    
+    n_rows, n_columns, n_actions = 4, 12, 4
     q_value_matrix = np.empty((n_rows, n_columns))
+
     for row in range(n_rows):
         for column in range(n_columns):
-            state_values = []
+            state = row * n_columns + column
 
-            for action in range(n_actions):
-                state_values.append(q.get((row * n_columns + column, action), -100))
+            # Handle the terminal state explicitly
+            if state == 47:
+                q_value_matrix[row, column] = -1
+                continue
 
-            maximum_value = max(
-                state_values
-            )  # determinamos la acción que arroja máximo valor
+            state_values = [q.get((state, action), -100) for action in range(n_actions)]
+            q_value_matrix[row, column] = max(state_values)
 
-            q_value_matrix[row, column] = maximum_value
-
-    # el valor del estado objetivo se asigna en -1 (reward recibido al llegar)
-    # para que se coloree de forma apropiada
-    q_value_matrix[3, 11] = -1
-
-    # se grafica la matriz de valor
     plt.imshow(q_value_matrix, cmap=plt.cm.RdYlGn)
-    plt.tight_layout()
     plt.colorbar()
+    plt.title("Valor de la mejor acción en cada estado")
 
-    for row, column in itertools.product(
-        range(q_value_matrix.shape[0]), range(q_value_matrix.shape[1])
-    ):
-        left_action = q.get((row * n_columns + column, 3), -1000)
-        down_action = q.get((row * n_columns + column, 2), -1000)
-        right_action = q.get((row * n_columns + column, 1), -1000)
-        up_action = q.get((row * n_columns + column, 0), -1000)
+    for row, column in itertools.product(range(n_rows), range(n_columns)):
+        state = row * n_columns + column
+        best_action_value = -float('inf')
+        best_action = None
+        arrow_direction = ""
 
-        arrow_direction = "D"
-        best_action = down_action
+        # we map action indices to arrow directions
+        action_map = {0: 'U', 1: 'R', 2: 'D', 3: 'L'}
 
-        if best_action < right_action:
-            arrow_direction = "R"
-            best_action = right_action
-        if best_action < left_action:
-            arrow_direction = "L"
-            best_action = left_action
-        if best_action < up_action:
-            arrow_direction = "U"
-            best_action = up_action
-        if best_action == -1:
-            arrow_direction = ""
+        for action in range(n_actions):
+            action_value = q.get((state, action), -1000)
+            if action_value > best_action_value:
+                best_action_value = action_value
+                best_action = action_map[action]
 
-        # notar que column, row están invertidos en orden en la línea de abajo
-        # porque representan a x,y del plot
-        plt.text(column, row, arrow_direction, horizontalalignment="center")
+        # we handle the terminal state explicitly
+        if state == 47:
+            best_action = ""
+
+        plt.text(column, row, best_action, horizontalalignment="center")
 
     plt.xticks([])
     plt.yticks([])
-    # plt.show()
-    # we save the plot
     plt.savefig("value_matrix.png")
-
-    print("\n Matriz de mejor acción-valor (en números): \n\n", q_value_matrix)
+    # plt.show()
 
 
 # ------------------------ Policies ------------------------------------------
@@ -225,17 +238,47 @@ def learn_SARSA(
     q: dict,
     hyperparameters: dict,
 ) -> None:
-    """Update the Q-value for the given state and action pair
-    using SARSA learning (on-policy TD control).
+    """Update the Q-value for the given state and action pair using SARSA
+    learning (on-policy TD control).
 
-    Args:
-        state (int): the current state
-        action (int): the current action
-        reward (int): the reward obtained by taking action `action` in state `state`
-        next_state (int): the next state
-        next_action (int): the next action
+    Parameters
+    ----------
+    state : int
+        The current state.
+    action : int
+        The current action.
+    reward : int
+        The reward obtained by taking action `action` in state `state`.
+    next_state : int
+        The next state.
+    next_action : int
+        The next action.
+    q : dict
+        The Q-value table, represented as a dictionary with state-action pairs
+        as keys and Q-values as values.
+    hyperparameters : dict
+        A dictionary of hyperparameters needed for the Q-value update.
+        Expected to contain 'alpha' and 'gamma'.
+
+    Notes
+    -----
+    The Q-value for the current state-action pair is updated using the
+    formula:
+
+    .. math::
+        Q(s, a) \leftarrow Q(s, a) + \alpha \times (r + \gamma \times Q(s', a') - Q(s, a))
+
+    Where:
+    - \( \alpha \) is the learning rate
+    - \( \gamma \) is the discount factor
+    - \( r \) is the reward
+    - \( Q(s, a) \) is the current Q-value
+    - \( Q(s', a') \) is the Q-value for the next state-action pair
+
+    The function initializes the Q-value to 0.0 for new state-action pairs if they are not already present in `q`.
+
     """
-
+    
     # initialize the Q-value for brand-new state-action pairs
     if (state, action) not in q:
         q[(state, action)] = 0.0  # or another initial value
@@ -427,11 +470,11 @@ avg_rew_per_episode, timesteps_ep, reward_ep = run(
     actions,
     q,
     random_state,
-    render=True,
+    render=False,
 )
 
 # plot_steps_per_episode(timesteps_ep)
 # plot_steps_per_episode_smooth(timesteps_ep)
-# draw_value_matrix(q)
+draw_value_matrix(q)
 
 env.close()
