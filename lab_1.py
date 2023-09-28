@@ -775,12 +775,12 @@ q = {}
 # }
 
 # Parameters for favouring convergence (still SARSA, but with softmax policy)
-# hyperparameters = {
-#     "alpha": 0.3,
-#     "gamma": 1,
-#     "epsilon": 0.1,
-#     "tau": 5,
-# }
+hyperparameters = {
+    "alpha": 0.3,
+    "gamma": 1,
+    "epsilon": 0.1,
+    "tau": 5,
+}
 
 # -----------------------  Other choices  ------------------------------------
 
@@ -805,30 +805,30 @@ random_state = np.random.RandomState(42)
 
 # -- Using the functions for plotting the metrics of a single run ------------
 # agent execution
-# avg_rew_per_episode, timesteps_ep, reward_ep = run(
-#     learning_function,
-#     hyperparameters,
-#     episodes_to_run,
-#     env,
-#     actions,
-#     q,
-#     random_state,
-#     render=False,
-# )
+avg_rew_per_episode, timesteps_ep, reward_ep = run(
+    learning_function,
+    hyperparameters,
+    episodes_to_run,
+    env,
+    actions,
+    q,
+    random_state,
+    render=False,
+)
 
 # plot_steps_per_episode(timesteps_ep)
 # plot_steps_per_episode_smooth(timesteps_ep)
 # draw_value_matrix(q)
 
-# plot_combined_metrics(reward_ep, timesteps_ep, hyperparameters, include_rewards=False, include_timesteps=True)
+# plot_combined_metrics(reward_ep, timesteps_ep, hyperparameters, include_rewards=True, include_timesteps=True)
 
 
 
 
 # -- Using the functions for comparing convergence for a single pair of curves
-# results = [(reward_ep, timesteps_ep)]
-# hyperparameters_list = [hyperparameters]
-# plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, include_timesteps=True, log_scale=False)
+results = [(reward_ep, timesteps_ep)]
+hyperparameters_list = [hyperparameters]
+plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, include_timesteps=True, log_scale=False)
 
 
 
@@ -861,28 +861,28 @@ random_state = np.random.RandomState(42)
 #     ]
 
 # changing tau
-hyperparameters_list = [
-    {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 5},
-    {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 15},
-    {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
-    {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 50},
-    ]
+# hyperparameters_list = [
+#     {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 5},
+#     {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 15},
+#     {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+#     {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 50},
+#     ]
 
 # --------------------- Ploting multiple curves ------------------------------
 
 
-results = run_multiple_experiments(
-    learning_function, 
-    hyperparameters_list, 
-    episodes_to_run, 
-    env, 
-    actions, 
-    q, 
-    random_state,
-    # render=False
-)
+# results = run_multiple_experiments(
+#     learning_function, 
+#     hyperparameters_list, 
+#     episodes_to_run, 
+#     env, 
+#     actions, 
+#     q, 
+#     random_state,
+#     # render=False
+# )
 
-plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, include_timesteps=True, log_scale=True, softmax=True)
+# plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, include_timesteps=True, log_scale=True, softmax=True)
 
 
 
