@@ -75,6 +75,7 @@ def plot_steps_per_episode_smooth(timesteps_ep) -> None:
     # plt.show()
     # we save the plot
     plt.savefig("steps_per_episode_smooth.png", dpi=1000)
+    plt.close()
 
 
 # This function combines the three previous ones and has a better output.
@@ -220,6 +221,7 @@ def draw_value_matrix(q: dict) -> None:
     plt.yticks([])
     plt.savefig("value_matrix.png")
     # plt.show()
+    plt.close()
 
 
 # ------------------------ Policies ------------------------------------------
@@ -232,9 +234,36 @@ def choose_action_e_greedy(
     hyperparameters: dict,
     random_state: np.random.RandomState,
 ) -> int:
-    """
-    Elije una acción de acuerdo al aprendizaje realizado previamente
-    usando una política de exploración épsilon-greedy
+    """Choose an action according to an epsilon-greedy policy based on the 
+    Q-values and epsilon parameter.
+    
+    Parameters
+    ----------
+    state : int
+        The current state of the environment.
+    actions : range
+        The set of possible actions.
+    q : dict
+        A dictionary containing the Q-values for state-action pairs.
+        The keys are tuples (state, action), and the values are the Q-values.
+    hyperparameters : dict
+        A dictionary containing hyperparameters for the algorithm.
+        Must contain the key 'epsilon' for the epsilon-greedy policy.
+    random_state : np.random.RandomState
+        A random state object for reproducible randomness.
+    
+    Returns
+    -------
+    int
+        The action selected according to the epsilon-greedy policy.
+    
+    Notes
+    -----
+    The epsilon-greedy policy works as follows:
+        - With probability epsilon, choose a random action.
+        - Otherwise, choose the action with the highest Q-value.
+        If there are multiple actions with the same highest Q-value,
+        one of them is selected randomly.
     """
     # ej: para 4 acciones inicializa en [0,0,0,0]
     q_values = [q.get((state, a), 0.0) for a in actions]
@@ -265,9 +294,37 @@ def choose_action_softmax(
     hyperparameters: dict,
     random_state: np.random.RandomState,
 ) -> int:
-    """
-    Choose an action according to the learning done previously
-    using a softmax policy.
+    """Choose an action according to a softmax policy, based on the
+    Q-values and temperature parameter.
+    
+    Parameters
+    ----------
+    state : int
+        The current state of the environment.
+    actions : range
+        The set of possible actions.
+    q : dict
+        A dictionary containing the Q-values for state-action pairs.
+        The keys are tuples (state, action), and the values are the Q-values.
+    hyperparameters : dict
+        A dictionary containing hyperparameters for the algorithm.
+        Must contain the key 'tau' for temperature.
+    random_state : np.random.RandomState
+        A random state object for reproducible randomness.
+    
+    Returns
+    -------
+    int
+        The action selected according to the softmax policy.
+    
+    Notes
+    -----
+    The softmax policy is defined as:
+        policy(a) = exp(Q(s, a) / tau) / Z
+    where:
+        Q(s, a) is the Q-value for state `s` and action `a`.
+        tau is the temperature parameter controlling exploration.
+        Z is the normalization constant.
     """
     # we get the value of each action in this state
     q_values = [q.get((state, a), 0.0) for a in actions]
@@ -291,6 +348,7 @@ def choose_action_softmax(
     # note that i is incremented one more time than needed
 
     return actions[i - 1]
+
 
 
 # ------------------ Action-value Learning algorithms ------------------------
@@ -586,7 +644,8 @@ def plot_multiple_metrics(
     hyperparameters_list: List[dict] = None,
     include_rewards: bool = True,
     include_timesteps: bool = True,
-    log_scale: bool = False
+    log_scale: bool = False,
+    softmax: bool = False,
 ) -> None:
     """
     Plot metrics from multiple experiments.
@@ -603,6 +662,10 @@ def plot_multiple_metrics(
         Flag to include timestep metrics in the plot.
     log_scale : bool, optional
         Flag to set the y-axis to a logarithmic scale.
+    softmax : bool, optional
+        Flag to indicate that the softmax policy is used (and the tau is to be
+        included in the labels). If False, the e-greedy policy is assumed (and
+        epsilon is included in the labels).
 
     Returns
     -------
@@ -623,7 +686,10 @@ def plot_multiple_metrics(
         hyperparameters = hyperparameters_list[i] if hyperparameters_list else {}
         episode_number = np.linspace(1, len(timesteps_ep) + 1, len(timesteps_ep) + 1)
 
-        label_suffix = f" (alpha={hyperparameters.get('alpha', 'NA')}, gamma={hyperparameters.get('gamma', 'NA')})"
+        if softmax:
+            label_suffix = f" (alpha={hyperparameters.get('alpha', 'NA')}, gamma={hyperparameters.get('gamma', 'NA')}, tau={hyperparameters.get('tau', 'NA')})"
+        else: # we assume that e-greedy is used
+            label_suffix = f" (alpha={hyperparameters.get('alpha', 'NA')}, gamma={hyperparameters.get('gamma', 'NA')}, epsilon={hyperparameters.get('epsilon', 'NA')})"
         
         if include_rewards:
             cum_rewards = np.cumsum(np.array(reward_ep))
@@ -708,11 +774,19 @@ q = {}
 #     "tau": 25,
 # }
 
+# Parameters for favouring convergence (still SARSA, but with softmax policy)
+# hyperparameters = {
+#     "alpha": 0.3,
+#     "gamma": 1,
+#     "epsilon": 0.1,
+#     "tau": 5,
+# }
+
 # -----------------------  Other choices  ------------------------------------
 
 
 # Policy options: choose_action_e_greedy, choose_action_softmax
-choose_action_with_policy = choose_action_e_greedy
+choose_action_with_policy = choose_action_softmax
 
 # Learning algorithm options: learn_Q_learning, learn_SARSA
 learning_function = learn_SARSA
@@ -729,7 +803,8 @@ random_state = np.random.RandomState(42)
 
 # ---------------------   Execution Zone   -----------------------------------
 
-# # agent execution
+# -- Using the functions for plotting the metrics of a single run ------------
+# agent execution
 # avg_rew_per_episode, timesteps_ep, reward_ep = run(
 #     learning_function,
 #     hyperparameters,
@@ -745,21 +820,31 @@ random_state = np.random.RandomState(42)
 # plot_steps_per_episode_smooth(timesteps_ep)
 # draw_value_matrix(q)
 
-# plot_combined_metrics(reward_ep, timesteps_ep, hyperparameters, include_rewards=True, include_timesteps=False)
+# plot_combined_metrics(reward_ep, timesteps_ep, hyperparameters, include_rewards=False, include_timesteps=True)
+
+
+
+
+# -- Using the functions for comparing convergence for a single pair of curves
+# results = [(reward_ep, timesteps_ep)]
+# hyperparameters_list = [hyperparameters]
+# plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, include_timesteps=True, log_scale=False)
+
 
 
 # ---------- Comparing convergence for different hyperparameters -------------
+
 # We take the hyperparameters given by the professors as base point from which
 # we will change one parameter at a time. These were:
 # hyperparameters = {"alpha": 0.5, "gamma": 1, "epsilon": 0.1, "tau": 25}
 
 # changing alpha
-hyperparameters_list = [
-    {'alpha': 0.01, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
-    {'alpha': 0.1, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
-    {'alpha': 0.3, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
-    {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
-    ]
+# hyperparameters_list = [
+#     {'alpha': 0.01, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+#     {'alpha': 0.1, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+#     {'alpha': 0.3, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+#     {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+#     ]
 
 # changing gamma
 # hyperparameters_list = [
@@ -775,7 +860,15 @@ hyperparameters_list = [
 #     {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.5, 'tau': 25},
 #     ]
 
-# ---------------------
+# changing tau
+hyperparameters_list = [
+    {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 5},
+    {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 15},
+    {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 25},
+    {'alpha': 0.5, 'gamma': 1, 'epsilon': 0.1, 'tau': 50},
+    ]
+
+# --------------------- Ploting multiple curves ------------------------------
 
 
 results = run_multiple_experiments(
@@ -789,7 +882,7 @@ results = run_multiple_experiments(
     # render=False
 )
 
-plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, include_timesteps=True, log_scale=False)
+plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, include_timesteps=True, log_scale=True, softmax=True)
 
 
 
