@@ -234,9 +234,9 @@ def choose_action_e_greedy(
     hyperparameters: dict,
     random_state: np.random.RandomState,
 ) -> int:
-    """Choose an action according to an epsilon-greedy policy based on the 
+    """Choose an action according to an epsilon-greedy policy based on the
     Q-values and epsilon parameter.
-    
+
     Parameters
     ----------
     state : int
@@ -251,12 +251,12 @@ def choose_action_e_greedy(
         Must contain the key 'epsilon' for the epsilon-greedy policy.
     random_state : np.random.RandomState
         A random state object for reproducible randomness.
-    
+
     Returns
     -------
     int
         The action selected according to the epsilon-greedy policy.
-    
+
     Notes
     -----
     The epsilon-greedy policy works as follows:
@@ -296,7 +296,7 @@ def choose_action_softmax(
 ) -> int:
     """Choose an action according to a softmax policy, based on the
     Q-values and temperature parameter.
-    
+
     Parameters
     ----------
     state : int
@@ -311,12 +311,12 @@ def choose_action_softmax(
         Must contain the key 'tau' for temperature.
     random_state : np.random.RandomState
         A random state object for reproducible randomness.
-    
+
     Returns
     -------
     int
         The action selected according to the softmax policy.
-    
+
     Notes
     -----
     The softmax policy is defined as:
@@ -348,7 +348,6 @@ def choose_action_softmax(
     # note that i is incremented one more time than needed
 
     return actions[i - 1]
-
 
 
 # ------------------ Action-value Learning algorithms ------------------------
@@ -493,6 +492,55 @@ def learn_Q_learning(
     )
 
 
+# --------- Funcitons for model-base algorithms -----------
+
+
+def dyna_Q_planning_function(
+    learning_function: Callable,
+    model: list,
+    q: dict,
+    hyperparameters: dict,
+    actions: range,
+    random_state: np.random.RandomState,
+):
+    """Perform planning using the learned model to improve Q-values.
+
+    The planning function samples k experiences from the model to update
+    Q-values, where k is specified in `hyperparameters`.
+
+    Parameters
+    ----------
+    model : list
+        List containing tuples of (state, action, reward, next_state), representing past experiences.
+    q : dict
+        Dictionary storing the Q-values.
+    hyperparameters : dict
+        Dictionary of hyperparameters such as the planning steps (k).
+    actions : range
+        Range object representing the available actions.
+    random_state : np.random.RandomState
+        A random number generator for reproducibility.
+    learning_function : Callable
+        Function that implements the learning rule for the Q-values.
+
+    """
+    k = hyperparameters["planning_steps"]
+    for _ in range(k):
+        # Generate a random index
+        index = random_state.randint(0, len(model))
+
+        # Use the index to pick an experience tuple from the model
+        state, action, reward, next_state = model[index]
+
+        next_action = choose_action_with_policy(
+            next_state, actions, q, hyperparameters, random_state
+        )
+
+        learning_function(
+            state, action, reward, next_state, next_action, q, hyperparameters
+        )
+
+
 # ------------------ Training Loop ------------------------
 
 
@@ -590,6 +638,110 @@ def run(
     return reward_of_episode.mean(), timesteps_of_episode, reward_of_episode
 
 
+def run_dyna_Q(
+    learning_function: Callable,
+    planning_function: Callable,
+    hyperparameters: dict,
+    episodes_to_run: int,
+    env: gym.Env,
+    actions: range,
+    q: dict,
+    model: list,
+    random_state: np.random.RandomState,
+    render: bool = False,
+) -> Tuple[float, np.ndarray, np.ndarray]:
+    """Execute the Dyna-Q Reinforcement Learning algorithm in a Gym
+    environment.
+
+    This function performs learning and planning at each step and updates the
+    Q-values accordingly.
+
+    Parameters
+    ----------
+    learning_function : Callable
+        Function that implements the learning rule for the Q-values.
+    planning_function : Callable
+        Function responsible for performing planning steps.
+    hyperparameters : dict
+        Dictionary containing hyperparameters such as learning rate, discount factor, etc.
+    episodes_to_run : int
+        Number of episodes to run the algorithm for.
+    env : gym.Env
+        The Gym environment to run the algorithm in.
+    actions : range
+        Range object representing the set of possible actions.
+    q : dict
+        Dictionary to store Q-values for state-action pairs.
+    model : list
+        List holding the experience gathered by the agent.
+    random_state : np.random.RandomState
+        A random number generator for reproducibility.
+    render : bool, optional
+        Whether to render the environment, by default False.
+
+    Returns
+    -------
+    Tuple[float, np.ndarray, np.ndarray]
+        The average reward, timesteps per episode, and rewards per episode.
+
+    """
+    model = []  # Initialize empty model
+    timesteps_of_episode = []  # Steps taken in each episode
+    reward_of_episode = []  # Reward obtained in each episode
+
+    for episode in range(episodes_to_run):
+        state, _ = env.reset()
+        episode_reward = 0
+        done = False
+        t = 0
+
+        while not done:
+            action = choose_action_with_policy(
+                state, actions, q, hyperparameters, random_state
+            )
+
+            next_state, reward, terminated, truncated, _ = env.step(action)
+
+            if render:
+                frame = env.render()
+
+            next_action = choose_action_with_policy(
+                next_state, actions, q, hyperparameters, random_state
+            )
+
+            episode_reward += reward
+
+            # Learning
+            learning_function(
+                state, action, reward, next_state, next_action, q, hyperparameters
+            )
+
+            # Update the model
+            model.append((state, action, reward, next_state))
+
+            # Planning
+            planning_function(
+                learning_function, model, q, hyperparameters, actions, random_state
+            )
+
+            done = terminated or truncated
+
+            if not done and t < 2000:
+                state = next_state
+            else:
+                done = True  # Manually setting the done flag
+                timesteps_of_episode.append(int(t + 1))
+                reward_of_episode.append(max(episode_reward, -100))
+
+            t += 1
+
+    return (
+        np.mean(reward_of_episode),
+        np.array(timesteps_of_episode),
+        np.array(reward_of_episode),
+    )
+
+
 # =============== CUSTOM CODE FOR ANALYZING CONVERGENCE ======================
 
 
@@ -617,7 +769,7 @@ def run_multiple_experiments(
         A list of tuples, each containing reward_ep and timesteps_ep for each hyperparameter set.
     """
 
-    render=False
+    render = False
     # this is hardcoded cause render=True doesn't make sense in this context,
     # buy I want to reuse the code of the `run` function.
 
@@ -640,7 +792,7 @@ def run_multiple_experiments(
 
 
 def plot_multiple_metrics(
-    results: List[Tuple[list, list]], 
+    results: List[Tuple[list, list]],
     hyperparameters_list: List[dict] = None,
     include_rewards: bool = True,
     include_timesteps: bool = True,
@@ -678,35 +830,54 @@ def plot_multiple_metrics(
     # Figure Size
     plt.figure(figsize=(16, 8))
 
-    
     for i, (reward_ep, timesteps_ep) in enumerate(results):
         color = color_palette[i]
-        lighter_color = tuple(list(color[:3]) + [0.5])  # Same RGB but with different Alpha
+        lighter_color = tuple(
+            list(color[:3]) + [0.5]
+        )  # Same RGB but with different Alpha
 
         hyperparameters = hyperparameters_list[i] if hyperparameters_list else {}
         episode_number = np.linspace(1, len(timesteps_ep) + 1, len(timesteps_ep) + 1)
 
         if softmax:
             label_suffix = f" (alpha={hyperparameters.get('alpha', 'NA')}, gamma={hyperparameters.get('gamma', 'NA')}, tau={hyperparameters.get('tau', 'NA')})"
-        else: # we assume that e-greedy is used
+        else:  # we assume that e-greedy is used
             label_suffix = f" (alpha={hyperparameters.get('alpha', 'NA')}, gamma={hyperparameters.get('gamma', 'NA')}, epsilon={hyperparameters.get('epsilon', 'NA')})"
-        
+
         if include_rewards:
             cum_rewards = np.cumsum(np.array(reward_ep))
-            reward_per_episode_smooth = [cum_rewards[j] / episode_number[j] for j in range(len(cum_rewards))]
-            plt.plot(reward_per_episode_smooth, label='Reward Smooth' + label_suffix, color=color)
-            plt.plot(reward_ep, label='Reward Original' + label_suffix, color=lighter_color)
+            reward_per_episode_smooth = [
+                cum_rewards[j] / episode_number[j] for j in range(len(cum_rewards))
+            ]
+            plt.plot(
+                reward_per_episode_smooth,
+                label="Reward Smooth" + label_suffix,
+                color=color,
+            )
+            plt.plot(
+                reward_ep, label="Reward Original" + label_suffix, color=lighter_color
+            )
 
         if include_timesteps:
             cum_steps = np.cumsum(np.array(timesteps_ep))
-            steps_per_episode_smooth = [cum_steps[j] / episode_number[j] for j in range(len(cum_steps))]
-            plt.plot(steps_per_episode_smooth, label='Timesteps Smooth' + label_suffix, color=color)
-            plt.plot(timesteps_ep, label='Timesteps Original' + label_suffix, color=lighter_color)
+            steps_per_episode_smooth = [
+                cum_steps[j] / episode_number[j] for j in range(len(cum_steps))
+            ]
+            plt.plot(
+                steps_per_episode_smooth,
+                label="Timesteps Smooth" + label_suffix,
+                color=color,
+            )
+            plt.plot(
+                timesteps_ep,
+                label="Timesteps Original" + label_suffix,
+                color=lighter_color,
+            )
 
     # Customizing y-ticks for linear or log scale
     if log_scale:
         plt.yscale("log")
-        
+
         # Adapt ticks for log scale
         y_min, y_max = plt.ylim()
         ticks = np.logspace(np.log10(y_min), np.log10(y_max), num=10)
@@ -715,12 +886,12 @@ def plot_multiple_metrics(
     else:
         # Customizing y-ticks for linear scale
         y_ticks = np.arange(
-            int(plt.ylim()[0]), 
-            int(plt.ylim()[1]) + 1, 
-            step=(plt.ylim()[1] - plt.ylim()[0]) / 20
+            int(plt.ylim()[0]),
+            int(plt.ylim()[1]) + 1,
+            step=(plt.ylim()[1] - plt.ylim()[0]) / 20,
         )
         plt.yticks(y_ticks)
-    
+
     # Labels and titles
     plt.xlabel("Episode")
     if include_rewards and include_timesteps:
@@ -732,7 +903,7 @@ def plot_multiple_metrics(
     elif include_timesteps:
         plt.ylabel("Timesteps")
         plt.title("Timesteps per Episode")
-    
+
     plt.legend()
 
     # saving plot
@@ -744,7 +915,6 @@ def plot_multiple_metrics(
         plt.savefig("timesteps_per_episode.png")
 
     plt.show()
-
 
 
 # ----------------------------------------------------------------------------
@@ -780,6 +950,7 @@ hyperparameters = {
     "gamma": 1,
     "epsilon": 0.1,
     "tau": 5,
+    "planning_steps": 10,
 }
 
 # -----------------------  Other choices  ------------------------------------
@@ -789,7 +960,7 @@ hyperparameters = {
 choose_action_with_policy = choose_action_softmax
 
 # Learning algorithm options: learn_Q_learning, learn_SARSA
-learning_function = learn_SARSA
+learning_function = learn_Q_learning
 
 # cantidad de episodios a ejecutar
 episodes_to_run = 500
@@ -804,17 +975,32 @@ random_state = np.random.RandomState(42)
 # ---------------------   Execution Zone   -----------------------------------
 
 # -- Using the functions for plotting the metrics of a single run ------------
-# agent execution
-avg_rew_per_episode, timesteps_ep, reward_ep = run(
+# # (model-free) agent execution
+# avg_rew_per_episode, timesteps_ep, reward_ep = run(
+#     learning_function,
+#     hyperparameters,
+#     episodes_to_run,
+#     env,
+#     actions,
+#     q,
+#     random_state,
+#     render=False,
+# )
+
+# Dyna-Q agent execution (model-based)
+avg_rew_per_episode, timesteps_ep, reward_ep = run_dyna_Q(
     learning_function,
+    dyna_Q_planning_function,
     hyperparameters,
     episodes_to_run,
     env,
     actions,
     q,
+    [],
     random_state,
     render=False,
 )
+
 
 # plot_steps_per_episode(timesteps_ep)
 # plot_steps_per_episode_smooth(timesteps_ep)
@@ -823,13 +1009,16 @@ avg_rew_per_episode, timesteps_ep, reward_ep = run(
 # plot_combined_metrics(reward_ep, timesteps_ep, hyperparameters, include_rewards=True, include_timesteps=True)
 
 
-
-
 # -- Using the functions for comparing convergence for a single pair of curves
 results = [(reward_ep, timesteps_ep)]
 hyperparameters_list = [hyperparameters]
-plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, include_timesteps=True, log_scale=False)
-
+plot_multiple_metrics(
+    results,
+    hyperparameters_list,
+    include_rewards=True,
+    include_timesteps=False,
+    log_scale=False,
+)
 
 
 # ---------- Comparing convergence for different hyperparameters -------------
@@ -872,18 +1061,17 @@ plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, incl
 
 
 # results = run_multiple_experiments(
-#     learning_function, 
-#     hyperparameters_list, 
-#     episodes_to_run, 
-#     env, 
-#     actions, 
-#     q, 
+#     learning_function,
+#     hyperparameters_list,
+#     episodes_to_run,
+#     env,
+#     actions,
+#     q,
 #     random_state,
 #     # render=False
 # )
 
 # plot_multiple_metrics(results, hyperparameters_list, include_rewards=False, include_timesteps=True, log_scale=True, softmax=True)
-
 
 
 env.close()
